@@ -1,0 +1,15 @@
+version: '2'
+
+networks:
+    default:
+        driver: bridge
+
+services:
+    tt:
+        container_name: odh-gbfs
+        ports: ["4004:8089"]
+        restart: "always"
+        image: odh-gbfs:latest
+        build:
+            context: ./
+            dockerfile: ./Dockerfile
