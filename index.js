@@ -174,7 +174,6 @@ app.get('/station_information.json', function (req, res) {
                     lat: station.scoordinate.y,
                     lon: station.scoordinate.x,
                     address: station.smetadata.address,
-                    region_id: station.sorigin,
                     capacity: station.smetadata["total-bays"] || null
                 })
             }
