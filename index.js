@@ -1,4 +1,3 @@
-const http = require('http');
 const express = require('express');
 const https = require('https');
 
@@ -10,7 +9,7 @@ var stationsReceived;
 var baysReceived;
 var bikesReceived;
 const PORT = 8089;
-const INTERVAL = 1; //minutes
+const INTERVAL = 10; //minutes
 
 const optionsStations = {
     hostname: 'mobility.api.opendatahub.bz.it',
@@ -140,10 +139,35 @@ app.get('/gbfs.json', function (req, res) {
                    {
                        name: "free_bike_status",
                        url: url+"/free_bike_status.json"
+                   },
+                   {
+                       name: "system_regions.json",
+                       url: url+"/system_regions.json.json"
                    }
                ]
            }
        }
+    });
+});
+
+app.get('/system_regions.json', function (req, res) {
+    res.json(
+    {
+        last_updated: lastUpdate,
+        ttl: 0,
+        version: "2.0",
+        data: {
+            regions: [
+                {
+                    region_id: "BZ",
+                    region_name: "Bolzano - Bozen"
+                },
+                {
+                    region_id: "ME",
+                    region_name: "Merano - Meran"
+                }
+            ]
+        }
     });
 });
 
@@ -162,6 +186,14 @@ app.get('/system_information.json', function (req, res) {
     });
 });
 
+function toHex(str) {
+    var result = '';
+    for (var i=0; i<str.length; i++) {
+      result += str.charCodeAt(i).toString(16);
+    }
+    return result;
+  }
+
 app.get('/station_information.json', function (req, res) {
     var stations = [];
     if(stationsReceived){
@@ -174,8 +206,36 @@ app.get('/station_information.json', function (req, res) {
                     lat: station.scoordinate.y,
                     lon: station.scoordinate.x,
                     address: station.smetadata.address,
+                    region_id: "BZ",
                     capacity: station.smetadata["total-bays"] || null
                 })
+            }
+        }
+    }
+
+    //ADD MERAN STATIONS (Drop-off stations)
+    if(bikesReceived){
+        for(var k = 0; k < bikesReceived.length; k++){
+            var bike = bikesReceived[k];
+            if(!bike.pcode && bike.smetadata.location_name){
+                var obj = {
+                    station_id: toHex(bike.smetadata.location_name),
+                    name: bike.smetadata.location_parking_name || bike.smetadata.location_name,
+                    lat: bike.smetadata.location_lat,
+                    lon: bike.smetadata.location_lng,
+                    address: bike.smetadata.location_street,
+                    region_id: "ME"
+                };
+                var found = false;
+                for(var x = 0; x < stations.length; x++){
+                    if(stations[x].station_id === obj.station_id){
+                        found = true;
+                        break;
+                    }
+                }
+                if(!found){
+                    stations.push(obj);
+                }
             }
         }
     }
@@ -243,6 +303,32 @@ app.get('/station_status.json', function (req, res) {
                 }
             }
 
+        }
+    }
+    //ADD MERAN STATIONS (Drop-off stations)
+    if(bikesReceived){
+        for(var k = 0; k < bikesReceived.length; k++){
+            var bike = bikesReceived[k];
+            if(!bike.pcode && bike.smetadata.location_name){
+                var obj = {
+                    station_id: toHex(bike.smetadata.location_name),
+                    num_bikes_available: 0,
+                    is_renting: false,
+                    is_returning: true,
+                    num_docks_available: 1000,
+                    last_reported: lastUpdate
+                };
+                var found = false;
+                for(var x = 0; x < stations.length; x++){
+                    if(stations[x].station_id === obj.station_id){
+                        found = true;
+                        break;
+                    }
+                }
+                if(!found){
+                    stations.push(obj);
+                }
+            }
         }
     }
 
