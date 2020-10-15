@@ -1,8 +1,9 @@
 const express = require('express');
 const https = require('https');
+const _ = require('lodash');
+const config = require('./config');
 
 var app = express();
-
 
 var lastUpdate = Math.trunc((new Date()).getTime() / 1000 );
 var stationsReceived;
@@ -11,31 +12,14 @@ var bikesReceived;
 const PORT = 8089;
 const INTERVAL = 10; //minutes
 
-const optionsStations = {
-    hostname: 'mobility.api.opendatahub.bz.it',
-    port: 443,
-    path: '/v2/flat%2Cnode/BikesharingStation?distinct=true',
-    method: 'GET',
-    headers: { 'User-Agent': "OpenMove-Bikesharing-Client" }
-};
-
-const optionsBays = {
-    hostname: 'mobility.api.opendatahub.bz.it',
-    port: 443,
-    path: '/v2/flat%2Cnode/Bicyclestationbay?distinct=true',
-    method: 'GET',
-    headers: { 'User-Agent': "OpenMove-Bikesharing-Client" }
-};
-
-const optionsBikes = {
-    hostname: 'mobility.api.opendatahub.bz.it',
-    port: 443,
-    path: '/v2/flat%2Cnode/Bicycle?distinct=true',
-    method: 'GET',
-    headers: { 'User-Agent': "OpenMove-Bikesharing-Client" }
-};
-
 console.log("Start GBFS OpenData Hub...")
+
+console.log("CONFIG:\n", config.endpoints);
+
+if(!config.endpoints || _.isEmpty(config.endpoints)) {
+    console.error('Config endpoints not defined!');
+    return;
+}
 
 function getData(){
     lastUpdate = Math.trunc((new Date()).getTime() / 1000 );
@@ -47,7 +31,7 @@ getData();
 setInterval(getData, INTERVAL * 60 * 1000);
 
 function getStations(){
-    const req = https.request(optionsStations, res => {
+    const req = https.request(config.endpoints.stations, res => {
             //console.log(`STATIONS: statusCode: ${res.statusCode}`)
             var str = "";
             res.on('data', function (chunk) {
@@ -69,7 +53,7 @@ function getStations(){
 }
 
 function getBikes(){
-    const req = https.request(optionsBikes, res => {
+    const req = https.request(config.endpoints.bikes, res => {
             //console.log(`BIKES: statusCode: ${res.statusCode}`)
             var str = "";
             res.on('data', function (chunk) {
@@ -91,7 +75,7 @@ function getBikes(){
 }
 
 function getBays(){
-    const req = https.request(optionsBays, res => {
+    const req = https.request(config.endpoints.bays, res => {
             //console.log(`BAYS: statusCode: ${res.statusCode}`)
             var str = "";
             res.on('data', function (chunk) {
@@ -373,5 +357,5 @@ app.get('/free_bike_status.json', function (req, res) {
 
 
 var server = app.listen(PORT, function () {
-   console.log("Server started ...");
+   console.log("Listening on port ", PORT);
 })
