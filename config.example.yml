@@ -1,5 +1,6 @@
 server:
-  port: '8089'
+  port: 8089
+  polling_interval: 10
 
 endpoints:
   default:

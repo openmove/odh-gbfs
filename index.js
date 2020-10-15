@@ -5,16 +5,14 @@ const config = require('./config');
 
 var app = express();
 
-var lastUpdate = Math.trunc((new Date()).getTime() / 1000 );
-var stationsReceived;
-var baysReceived;
-var bikesReceived;
-const PORT = 8089;
-const INTERVAL = 10; //minutes
+var lastUpdate = Math.trunc((new Date()).getTime() / 1000 ),
+    stationsReceived,
+    baysReceived,
+    bikesReceived;
 
 console.log("Start GBFS OpenData Hub...")
 
-console.log("CONFIG:\n", config.endpoints);
+console.log("Config:\n", config);
 
 if(!config.endpoints || _.isEmpty(config.endpoints)) {
     console.error('Config endpoints not defined!');
@@ -28,7 +26,7 @@ function getData(){
     getBikes();
 }
 getData();
-setInterval(getData, INTERVAL * 60 * 1000);
+setInterval(getData, config.polling_interval * 60 * 1000);
 
 function getStations(){
     const req = https.request(config.endpoints.stations, res => {
@@ -95,9 +93,6 @@ function getBays(){
 
     req.end()
 }
-
-
-
 
 app.get('/gbfs.json', function (req, res) {
     var url = req.protocol + '://' + req.get('host');
@@ -356,6 +351,6 @@ app.get('/free_bike_status.json', function (req, res) {
 });
 
 
-var server = app.listen(PORT, function () {
-   console.log("Listening on port ", PORT);
+var server = app.listen(config.server.port, function () {
+   console.log("Listening on port ", config.server.port);
 })

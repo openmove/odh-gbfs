@@ -39,6 +39,10 @@ catch (e) {
 }
 
 const defaultConfig = {
+	server: {
+		port: 8089,
+		polling_interval: 10 //minutes
+	},
 	endpoints: {
 		default: {
 			port: 80,
