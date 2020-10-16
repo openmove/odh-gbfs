@@ -26,7 +26,7 @@ function getData(){
     getBikes();
 }
 getData();
-setInterval(getData, config.polling_interval * 60 * 1000);
+setInterval(getData, config.server.polling_interval * 60 * 1000);
 
 function getStations(){
     const req = https.request(config.endpoints.stations, res => {
@@ -37,7 +37,7 @@ function getStations(){
             });
 
             res.on('end', function () {
-                var tmp = JSON.parse(str);
+                let tmp = JSON.parse(str);
                 var stations = tmp.data;
                 stationsReceived = stations;
             });
@@ -59,7 +59,7 @@ function getBikes(){
             });
 
             res.on('end', function () {
-                var tmp = JSON.parse(str);
+                let tmp = JSON.parse(str);
                 var bikes = tmp.data;
                 bikesReceived = bikes;
             });
@@ -81,7 +81,7 @@ function getBays(){
             });
 
             res.on('end', function () {
-                var tmp = JSON.parse(str);
+                let tmp = JSON.parse(str);
                 var bays = tmp.data;
                 baysReceived = bays;
             });
@@ -94,8 +94,12 @@ function getBays(){
     req.end()
 }
 
-app.get('/gbfs.json', function (req, res) {
-    var url = req.protocol + '://' + req.get('host');
+app.get('/:context/gbfs.json', function (req, res) {
+    let context = req.params.context;
+    if(context != "bz" && context!="me"){
+        res.status(500).send({ error: "wrong context" });
+    }
+    var url = req.protocol + '://' + req.get('host') + "/" + context;
     res.json({
         last_updated: lastUpdate,
         ttl: 0,
@@ -121,7 +125,7 @@ app.get('/gbfs.json', function (req, res) {
                    },
                    {
                        name: "system_regions.json",
-                       url: url+"/system_regions.json.json"
+                       url: url+"/system_regions.json"
                    }
                ]
            }
@@ -129,7 +133,11 @@ app.get('/gbfs.json', function (req, res) {
     });
 });
 
-app.get('/system_regions.json', function (req, res) {
+app.get('/:context/system_regions.json', function (req, res) {
+    let context = req.params.context;
+    if(context != "bz" && context!="me"){
+        res.status(500).send({ error: "wrong context" });
+    }
     res.json(
     {
         last_updated: lastUpdate,
@@ -150,16 +158,31 @@ app.get('/system_regions.json', function (req, res) {
     });
 });
 
-app.get('/system_information.json', function (req, res) {
+app.get('/:context/system_information.json', function (req, res) {
+    let context = req.params.context;
+    if(context != "bz" && context!="me"){
+        res.status(500).send({ error: "wrong context" });
+    }
+    var systemId = "odh_bikesharing";
+    var systemName = "Bikesharing "
+    if(context === "bz"){
+        systemId += "_bz";
+        systemName += " Bolzano";
+    }
+    if(context === "me"){
+        systemId += "_me";
+        systemName += " Merano";
+    }
+
     res.json(
     {
         last_updated: lastUpdate,
         ttl: 0,
         version: "2.0",
         data: {
-            system_id: "odh_bikesharing",
+            system_id: systemId,
             language: "it",
-            name: "BikeSharing Alto Adige/Südtirol",
+            name: systemName,
             timezone: "Europe/Rome"
         }
     });
@@ -173,51 +196,63 @@ function toHex(str) {
     return result;
   }
 
-app.get('/station_information.json', function (req, res) {
+app.get('/:context/station_information.json', function (req, res) {
     var stations = [];
-    if(stationsReceived){
-        for(var i = 0; i < stationsReceived.length; i++){
-            var station = stationsReceived[i];
-            if(station.sactive && station.savailable){
-                stations.push({
-                    station_id: station.scode,
-                    name: station.sname,
-                    lat: station.scoordinate.y,
-                    lon: station.scoordinate.x,
-                    address: station.smetadata.address,
-                    region_id: "BZ",
-                    capacity: station.smetadata["total-bays"] || null
-                })
+    let context = req.params.context;
+    if(context != "bz" && context!="me"){
+        res.status(500).send({ error: "wrong context" });
+    }
+
+    if(context === "bz"){
+        if(stationsReceived){
+            for(var i = 0; i < stationsReceived.length; i++){
+                var station = stationsReceived[i];
+                if(station.sactive && station.savailable){
+                    stations.push({
+                        station_id: station.scode,
+                        name: station.sname,
+                        lat: station.scoordinate.y,
+                        lon: station.scoordinate.x,
+                        address: station.smetadata.address,
+                        region_id: "BZ",
+                        capacity: station.smetadata["total-bays"] || null
+                    })
+                }
             }
         }
     }
 
-    //ADD MERAN STATIONS (Drop-off stations)
-    if(bikesReceived){
-        for(var k = 0; k < bikesReceived.length; k++){
-            var bike = bikesReceived[k];
-            if(!bike.pcode && bike.smetadata.location_name){
-                var obj = {
-                    station_id: toHex(bike.smetadata.location_name),
-                    name: bike.smetadata.location_parking_name || bike.smetadata.location_name,
-                    lat: bike.smetadata.location_lat,
-                    lon: bike.smetadata.location_lng,
-                    address: bike.smetadata.location_street,
-                    region_id: "ME"
-                };
-                var found = false;
-                for(var x = 0; x < stations.length; x++){
-                    if(stations[x].station_id === obj.station_id){
-                        found = true;
-                        break;
+    if(context === "me"){
+        //ADD MERAN STATIONS (Drop-off stations)
+        if(bikesReceived){
+            for(var k = 0; k < bikesReceived.length; k++){
+                var bike = bikesReceived[k];
+                if(!bike.pcode && bike.smetadata.location_name){
+                    var obj = {
+                        station_id: toHex(bike.smetadata.location_name),
+                        name: bike.smetadata.location_parking_name || bike.smetadata.location_name,
+                        lat: bike.smetadata.location_lat,
+                        lon: bike.smetadata.location_lng,
+                        address: bike.smetadata.location_street,
+                        region_id: "ME"
+                    };
+                    var found = false;
+                    for(var x = 0; x < stations.length; x++){
+                        if(stations[x].station_id === obj.station_id){
+                            found = true;
+                            break;
+                        }
                     }
-                }
-                if(!found){
-                    stations.push(obj);
+                    if(!found){
+                        stations.push(obj);
+                    }
                 }
             }
         }
     }
+
+
+
     res.json(
     {
         last_updated: lastUpdate,
@@ -229,83 +264,93 @@ app.get('/station_information.json', function (req, res) {
     });
 });
 
-app.get('/station_status.json', function (req, res) {
+app.get('/:context/station_status.json', function (req, res) {
+    let context = req.params.context;
+    if(context != "bz" && context!="me"){
+        res.status(500).send({ error: "wrong context" });
+    }
     var stations = [];
-    if(stationsReceived){
-        for(var i = 0; i < stationsReceived.length; i++){
-            var station = stationsReceived[i];
-            if(station.sactive && station.savailable){
-                var obj = {
-                    station_id: station.scode,
-                    is_renting: true,
-                    is_installed: true,
-                    is_returning: true,
-                    num_docks_available: 0,
-                    last_reported: lastUpdate
-                };
 
-                if(station.smetadata.bikes){
-                    obj.num_bikes_available = station.smetadata.bikes["number-available"];
-                }else{
-                    if(baysReceived){
-                        var dockAvailable = 0;
-                        var dockDisabled = 0;
-                        var bikeAvailable = 0;
-                        dockAvailable = station.smetadata["total-bays"];
-                        for(var j = 0; j < baysReceived.length; j++){
-                            var bay = baysReceived[j];
-                            if(baysReceived[j].pcode === station.scode){
-                                if(!bay.savailable){
-                                    dockDisabled++;
-                                    dockAvailable--;
-                                }
-                                if(bikesReceived){
-                                    for(var k = 0; k < bikesReceived.length; k++){
-                                        var bike = bikesReceived[k];
-                                        if(bike.pcode === bay.scode){
-                                            if(bike.savailable){
-                                                bikeAvailable++;
-                                                dockAvailable--;
+    if(context === "bz"){
+        if(stationsReceived){
+            for(var i = 0; i < stationsReceived.length; i++){
+                var station = stationsReceived[i];
+                if(station.sactive && station.savailable){
+                    var obj = {
+                        station_id: station.scode,
+                        is_renting: true,
+                        is_installed: true,
+                        is_returning: true,
+                        num_docks_available: 0,
+                        last_reported: lastUpdate
+                    };
+
+                    if(station.smetadata.bikes){
+                        obj.num_bikes_available = station.smetadata.bikes["number-available"];
+                    }else{
+                        if(baysReceived){
+                            var dockAvailable = 0;
+                            var dockDisabled = 0;
+                            var bikeAvailable = 0;
+                            dockAvailable = station.smetadata["total-bays"];
+                            for(var j = 0; j < baysReceived.length; j++){
+                                var bay = baysReceived[j];
+                                if(baysReceived[j].pcode === station.scode){
+                                    if(!bay.savailable){
+                                        dockDisabled++;
+                                        dockAvailable--;
+                                    }
+                                    if(bikesReceived){
+                                        for(var k = 0; k < bikesReceived.length; k++){
+                                            var bike = bikesReceived[k];
+                                            if(bike.pcode === bay.scode){
+                                                if(bike.savailable){
+                                                    bikeAvailable++;
+                                                    dockAvailable--;
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
+                            obj.num_docks_available = dockAvailable;
+                            obj.num_bikes_available = bikeAvailable;
+                            obj.num_docks_disabled = dockDisabled;
                         }
-                        obj.num_docks_available = dockAvailable;
-                        obj.num_bikes_available = bikeAvailable;
-                        obj.num_docks_disabled = dockDisabled;
+                    }
+                    if(obj.num_bikes_available >= 0 ){
+                        stations.push(obj)
                     }
                 }
-                if(obj.num_bikes_available >= 0 ){
-                    stations.push(obj)
-                }
-            }
 
+            }
         }
     }
-    //ADD MERAN STATIONS (Drop-off stations)
-    if(bikesReceived){
-        for(var k = 0; k < bikesReceived.length; k++){
-            var bike = bikesReceived[k];
-            if(!bike.pcode && bike.smetadata.location_name){
-                var obj = {
-                    station_id: toHex(bike.smetadata.location_name),
-                    num_bikes_available: 0,
-                    is_renting: false,
-                    is_returning: true,
-                    num_docks_available: 1000,
-                    last_reported: lastUpdate
-                };
-                var found = false;
-                for(var x = 0; x < stations.length; x++){
-                    if(stations[x].station_id === obj.station_id){
-                        found = true;
-                        break;
+
+    if(context === "me"){
+        //ADD MERAN STATIONS (Drop-off stations)
+        if(bikesReceived){
+            for(var k = 0; k < bikesReceived.length; k++){
+                var bike = bikesReceived[k];
+                if(!bike.pcode && bike.smetadata.location_name){
+                    var obj = {
+                        station_id: toHex(bike.smetadata.location_name),
+                        num_bikes_available: 0,
+                        is_renting: false,
+                        is_returning: true,
+                        num_docks_available: 1000,
+                        last_reported: lastUpdate
+                    };
+                    var found = false;
+                    for(var x = 0; x < stations.length; x++){
+                        if(stations[x].station_id === obj.station_id){
+                            found = true;
+                            break;
+                        }
                     }
-                }
-                if(!found){
-                    stations.push(obj);
+                    if(!found){
+                        stations.push(obj);
+                    }
                 }
             }
         }
@@ -322,19 +367,25 @@ app.get('/station_status.json', function (req, res) {
     });
 });
 
-app.get('/free_bike_status.json', function (req, res) {
+app.get('/:context/free_bike_status.json', function (req, res) {
+    let context = req.params.context;
+    if(context != "bz" && context!="me"){
+        res.status(500).send({ error: "wrong context" });
+    }
     var bikes = [];
-    if(bikesReceived){
-        for(var i = 0; i < bikesReceived.length; i++){
-            var bike = bikesReceived[i];
-            if(!bike.pcode && bike.savailable && bike.sactive){
-                bikes.push({
-                    bike_id: bike.scode,
-                    lat: bike.scoordinate.y,
-                    lon: bike.scoordinate.x,
-                    is_reserved: bike.smetadata["future-availability"] == 0,
-                    is_disabled: bike.smetadata["in-maintenance"] == 1
-                });
+    if(context === "me"){
+        if(bikesReceived){
+            for(var i = 0; i < bikesReceived.length; i++){
+                var bike = bikesReceived[i];
+                if(!bike.pcode && bike.savailable && bike.sactive){
+                    bikes.push({
+                        bike_id: bike.scode,
+                        lat: bike.scoordinate.y,
+                        lon: bike.scoordinate.x,
+                        is_reserved: bike.smetadata["future-availability"] == 0,
+                        is_disabled: bike.smetadata["in-maintenance"] == 1
+                    });
+                }
             }
         }
     }
